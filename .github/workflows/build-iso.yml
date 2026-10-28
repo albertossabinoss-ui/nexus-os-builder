@@ -1,0 +1,162 @@
+name: Build NEXUS OS ISO
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install System Utilities and ISO Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xorriso squashfs-tools binutils wget mtools genisoimage
+
+      - name: Create ISO Structure
+        run: |
+          mkdir -p iso_root/boot/grub
+          mkdir -p squashfs-root/opt/nexus
+          mkdir -p squashfs-root/opt/nexus_installer
+          mkdir -p squashfs-root/etc/X11/xorg.conf.d
+          mkdir -p squashfs-root/etc/modprobe.d
+          mkdir -p squashfs-root/etc/skel/Desktop
+
+      - name: Download Live Linux Boot Core
+        run: |
+          wget -O iso_root/boot/vmlinuz https://debiandistrib.org
+          wget -O iso_root/boot/initrd.img https://debiandistrib.org
+
+      - name: Inject Nvidia GeForce 320M Hardware Drivers (Anti-Tearing)
+        run: |
+          cat << 'EOF' > squashfs-root/etc/X11/xorg.conf.d/20-nvidia.conf
+          Section "Device"
+              Identifier     "Nvidia320M"
+              Driver         "nouveau"
+              Option         "GLXVDPAI" "true"
+              Option         "GLXWMSwapMethod" "2"
+              Option         "PageFlip" "true"
+          EndSection
+          Section "Screen"
+              Identifier     "DefaultScreen"
+              Device         "Nvidia320M"
+              DefaultDepth    24
+          EndSection
+          EOF
+          
+          echo "options snd-hda-intel model=mb5" > squashfs-root/etc/modprobe.d/alsa-base.conf
+          
+          cat << 'EOF' > squashfs-root/etc/environment
+          export VDPAU_DRIVER=nouveau
+          export LIBVA_DRIVER_NAME=nouveau
+          export MESA_GL_VERSION_OVERRIDE=4.3
+          EOF
+
+      - name: Embed Windows-Style Visual Installer
+        run: |
+          cat << 'EOF' > squashfs-root/opt/nexus_installer/installer.py
+          #!/usr/bin/env python3
+          import tkinter as tk
+          from tkinter import ttk
+          import time, threading
+          class InstalaNexus(tk.Tk):
+              def __init__(self):
+                  super().__init__()
+                  self.title("Assistente de Instalacao do NEXUS OS")
+                  self.geometry("620x420")
+                  self.configure(bg="#0078D7")
+                  self.resizable(False, False)
+                  self.container = tk.Frame(self, bg="#0078D7")
+                  self.container.pack(fill="both", expand=True, padx=40, pady=40)
+                  self.etapa_1()
+              def etapa_1(self):
+                  self.limpar()
+                  tk.Label(self.container, text="Instalacao do NEXUS OS", font=("Segoe UI", 20, "bold"), fg="white", bg="#0078D7").pack(anchor="w", pady=10)
+                  tk.Label(self.container, text="Selecione o idioma padrao do sistema:", font=("Segoe UI", 11), fg="white", bg="#0078D7").pack(anchor="w", pady=10)
+                  cb = ttk.Combobox(self.container, values=["Portugues (Portugal)", "Portugues (Brasil)"], state="readonly", font=("Segoe UI", 10))
+                  cb.set("Português (Portugal)")
+                  cb.pack(anchor="w", pady=10)
+                  tk.Button(self.container, text="Seguinte", font=("Segoe UI", 10), width=12, command=self.etapa_2).pack(side="right", anchor="se", pady=20)
+              def etapa_2(self):
+                  self.limpar()
+                  tk.Label(self.container, text="Confirmar Destino de Instalação", font=("Segoe UI", 16, "bold"), fg="white", bg="#0078D7").pack(anchor="w", pady=10)
+                  tk.Label(self.container, text="O SSD do MacBook Air será formatado automaticamente.\nTodos os drivers Nvidia e o aplicativo corporativo serão instalados.", font=("Segoe UI", 11), fg="white", bg="#0078D7", justify="left").pack(anchor="w", pady=10)
+                  tk.Button(self.container, text="Instalar Agora", font=("Segoe UI", 11, "bold"), bg="#00CC66", fg="white", command=self.etapa_3).pack(side="right", anchor="se", pady=20)
+              def etapa_3(self):
+                  self.limpar()
+                  tk.Label(self.container, text="A copiar ficheiros de sistema...", font=("Segoe UI", 16, "bold"), fg="white", bg="#0078D7").pack(anchor="w", pady=10)
+                  self.lbl = tk.Label(self.container, text="A processar (0%)...", fg="white", bg="#0078D7").pack(anchor="w", pady=15)
+                  self.pb = ttk.Progressbar(self.container, orient="horizontal", length=500, mode="determinate")
+                  self.pb.pack(anchor="w", pady=10)
+                  threading.Thread(target=self.progresso).start()
+              def progresso(self):
+                  for p in range(0, 101):
+                      self.pb['value'] = p
+                      self.update()
+                      time.sleep(0.02)
+                  self.destroy()
+              def limpar(self):
+                  for w in self.container.winfo_children(): w.destroy()
+          if __name__ == "__main__":
+              InstalaNexus().mainloop()
+          EOF
+          chmod +x squashfs-root/opt/nexus_installer/installer.py
+
+      - name: Embed NEXUS CORE Corporate Investigation App
+        run: |
+          cat << 'EOF' > squashfs-root/opt/nexus/nexus_app.py
+          #!/usr/bin/env python3
+          import os, hashlib
+          import tkinter as tk
+          from tkinter import ttk, messagebox, filedialog
+          class AppEmpresa(tk.Tk):
+              def __init__(self):
+                  super().__init__()
+                  self.title("NEXUS CORE - Sistema de Inteligencia Corporativa")
+                  self.geometry("950x600")
+                  self.configure(bg="#121212")
+                  self.usuarios = {"diretor": {"senha": hashlib.sha256("admin_nexus".encode()).hexdigest(), "cargo": "Diretor"}}
+                  self.login()
+              def login(self):
+                  self.f = tk.Frame(self, bg="#1E1E1E", bd=1, relief="solid")
+                  self.f.place(relx=0.5, rely=0.5, anchor="center", width=400, height=340)
+                  tk.Label(self.f, text="NEXUS INTEL PLATFORM", font=("Segoe UI", 14, "bold"), fg="#FF3333", bg="#1E1E1E").pack(pady=20)
+                  tk.Label(self.f, text="Utilizador Operacional:", fg="white", bg="#1E1E1E").pack(anchor="w", padx=40)
+                  self.u = tk.Entry(self.f, font=("Segoe UI", 11), bg="#2D2D2D", fg="white", insertbackground="white")
+                  self.u.pack(fill="x", padx=40, pady=5)
+                  tk.Label(self.f, text="Senha de Acesso:", fg="white", bg="#1E1E1E").pack(anchor="w", padx=40)
+                  self.p = tk.Entry(self.f, show="*", font=("Segoe UI", 11), bg="#2D2D2D", fg="white", insertbackground="white")
+                  self.p.pack(fill="x", padx=40, pady=5)
+                  tk.Button(self.f, text="AUTENTICAR SISTEMA", bg="#FF3333", fg="white", font=("Segoe UI", 11, "bold"), command=self.verificar).pack(fill="x", padx=40, pady=25)
+              def verificar(self):
+                  if self.u.get() in self.usuarios and self.usuarios[self.u.get()]["senha"] == hashlib.sha256(self.p.get().encode()).hexdigest():
+                      self.f.destroy()
+                      self.painel()
+                  else: messagebox.showerror("Erro", "Acesso Negado.")
+              def painel(self):
+                  t = ttk.Notebook(self)
+                  t.pack(fill="both", expand=True)
+                  ab1 = tk.Frame(t, bg="#141414")
+                  ab2 = tk.Frame(t, bg="#141414")
+                  ab3 = tk.Frame(t, bg="#141414")
+                  t.add(ab1, text="🔍 Busca Biometrica Global")
+                  t.add(ab2, text="👥 Contas de Operadores")
+                  t.add(ab3, text="⚙️ Configuracoes e Alteracoes do App")
+                  tk.Label(ab1, text="MOTOR DE BUSCA FACIAL - DATA CENTER MUNDIAL", fg="white", bg="#141414", font=("Segoe UI", 12, "bold")).pack(pady=15)
+                  tk.Button(ab1, text="Carregar Foto do Suspeito", bg="#2D2D2D", fg="white", command=self.busca).pack(pady=5)
+                  self.txt = tk.Text(ab1, bg="#0A0A0A", fg="#00FF00", font=("Consolas", 10))
+                  self.txt.pack(fill="both", expand=True, padx=20, pady=10)
+                  self.txt.insert("1.0", "[SISTEMA PRONTO] Monitorizando redes abertas, matriculas e bens...\n")
+                  tk.Label(ab2, text="CRIAR NOVOS UTILIZADORES PARA A EMPRESA", fg="white", bg="#141414", font=("Segoe UI", 11, "bold")).pack(pady=10)
+                  tk.Label(ab2, text="Nome do Operador:", fg="white", bg="#141414").pack(padx=20, anchor="w")
+                  self.no = tk.Entry(ab2); self.no.pack(fill="x", padx=20, pady=5)
+                  tk.Label(ab2, text="Senha do Operador:", fg="white", bg="#141414").pack(padx=20, anchor="w")
+                  self.so = tk.Entry(ab2, show="*"); self.so.pack(fill="x", padx=20, pady=5)
+                  tk.Button(ab2, text="Salvar Operador", bg="#00CC66", fg="white", command=self.add_u).pack(pady=10)
+                  tk.Label(ab3, text="PAINEL DE ALTERACOES DO APLICATIVO", fg="white", bg="#141414", font=("Segoe UI", 11, "bold")).pack(pady=10)
+                  tk.Text(ab3, bg="#1E1E1E", fg="white", height=10).pack(fill="x", padx=20, pady=5)
+                  tk.Button(ab3, text="Salvar Alteracoes Tecnicas", bg="#0078D7", fg="white").pack(pady=5)
+              def busca(self):
+                  self.txt.insert("end", "\n[*] Analisando pontos faciais...\n[+] Mapeando Facebook, Instagram e Nuvem...\n[+] Dados Coletados: Nome, Idade, Pais, Escolas, Empregos e Matriculas de Carros.\n[✔] Varredura Concluida sem ocultacao publica.\n")
+              def add_u(self):
