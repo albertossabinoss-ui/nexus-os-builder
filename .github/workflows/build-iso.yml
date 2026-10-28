@@ -12,21 +12,22 @@ jobs:
       - name: Install System Utilities and ISO Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xorriso squashfs-tools binutils wget mtools genisoimage
+          sudo apt-get install -y xorriso squashfs-tools binutils wget mtools live-build syslinux-utils genisoimage
 
-      - name: Create ISO Structure
+      - name: Create Clean ISO Architecture
         run: |
-          mkdir -p iso_root/boot/grub
+          mkdir -p iso_root/live
+          mkdir -p iso_root/isolinux
           mkdir -p squashfs-root/opt/nexus
           mkdir -p squashfs-root/opt/nexus_installer
           mkdir -p squashfs-root/etc/X11/xorg.conf.d
           mkdir -p squashfs-root/etc/modprobe.d
           mkdir -p squashfs-root/etc/skel/Desktop
 
-      - name: Download Live Linux Boot Core
+      - name: Download Official Live Boot Kernel and Core
         run: |
-          wget -O iso_root/boot/vmlinuz https://debiandistrib.org
-          wget -O iso_root/boot/initrd.img https://debiandistrib.org
+          wget -O iso_root/live/vmlinuz http://ubuntu.com
+          wget -O iso_root/live/initrd.img http://ubuntu.com
 
       - name: Inject Nvidia GeForce 320M Hardware Drivers (Anti-Tearing)
         run: |
