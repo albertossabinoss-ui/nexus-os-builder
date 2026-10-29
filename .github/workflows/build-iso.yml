@@ -12,9 +12,9 @@ jobs:
       - name: Install System Utilities and ISO Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xorriso squashfs-tools binutils wget mtools live-build syslinux-utils genisoimage
+          sudo apt-get install -y debootstrap xorriso squashfs-tools binutils wget mtools genisoimage syslinux-utils isolinux
 
-      - name: Create Clean ISO Architecture
+      - name: Create Base Project Directories
         run: |
           mkdir -p iso_root/live
           mkdir -p iso_root/isolinux
@@ -24,7 +24,7 @@ jobs:
           mkdir -p squashfs-root/etc/modprobe.d
           mkdir -p squashfs-root/etc/skel/Desktop
 
-      - name: Download Official Live Boot Kernel and Core
+      - name: Download Pure Linux Kernel for Nexus OS
         run: |
           wget -O iso_root/live/vmlinuz http://ubuntu.com
           wget -O iso_root/live/initrd.img http://ubuntu.com
@@ -52,6 +52,7 @@ jobs:
           export VDPAU_DRIVER=nouveau
           export LIBVA_DRIVER_NAME=nouveau
           export MESA_GL_VERSION_OVERRIDE=4.3
+          EndSection
           EOF
 
       - name: Embed Windows-Style Visual Installer
